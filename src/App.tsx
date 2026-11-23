@@ -5,21 +5,29 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CertificationAndRoadmap } from './components/CertificationAndRoadmap';
+import { FloatingAiAssistant } from './components/FloatingAiAssistant';
+import { GroupClassEnrollModal } from './components/GroupClassEnrollModal';
 import { HeroAndSearch } from './components/HeroAndSearch';
+import { RegistrationPortal } from './components/RegistrationPortal';
 import { StudentPortal } from './components/StudentPortal';
+import { StudyDownloadPage } from './components/StudyDownloadPage';
 import { TopBar, type ActiveTab } from './components/TopBar';
 import { TutorBookingModal } from './components/TutorBookingModal';
 import { TutorPortal } from './components/TutorPortal';
 import { VirtualClassroomModal } from './components/VirtualClassroomModal';
-import type { Booking, ClientTier, PlatformState, Tutor } from './types';
+import type { Booking, ClientTier, GroupClassSession, PlatformState, Tutor } from './types';
 
 export default function App() {
+  const [isDownloadRoute, setIsDownloadRoute] = useState(
+    () => typeof window !== 'undefined' && window.location.pathname === '/download-study'
+  );
   const [state, setState] = useState<PlatformState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('search');
   const [showAiMatcher, setShowAiMatcher] = useState(false);
   const [selectedTutor, setSelectedTutor] = useState<Tutor | null>(null);
+  const [selectedGroupClass, setSelectedGroupClass] = useState<GroupClassSession | null>(null);
   const [classroomBooking, setClassroomBooking] = useState<Booking | null>(null);
 
   const fetchBootstrap = useCallback(async () => {
@@ -53,19 +61,49 @@ export default function App() {
     }
   };
 
+  const handleToggleFavorite = async (tutorId: string) => {
+    const res = await fetch('/api/favorites/toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tutorId }),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      setState((prev) => (prev ? { ...prev, favoriteTutorIds: data.favoriteTutorIds } : prev));
+    }
+  };
+
   const handleOpenAiMatcher = () => {
     setActiveTab('search');
     setShowAiMatcher(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Keep selectedTutor synced when reviews or slots update
   const currentSelectedTutor = selectedTutor
     ? state?.tutors.find((t) => t.id === selectedTutor.id) || selectedTutor
     : null;
 
+  const currentSelectedGroupClass = selectedGroupClass
+    ? state?.groupClasses?.find((g) => g.id === selectedGroupClass.id) || selectedGroupClass
+    : null;
+
+  const currentClassroomBooking = classroomBooking
+    ? state?.bookings.find((b) => b.id === classroomBooking.id) || classroomBooking
+    : null;
+
+  if (isDownloadRoute) {
+    return (
+      <StudyDownloadPage
+        onBackToApp={() => {
+          window.history.pushState({}, '', '/');
+          setIsDownloadRoute(false);
+        }}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-[#F8FAFC] text-[#0F172A]">
+    <div className="min-h-screen flex flex-col bg-blueprint-grid text-[#0F172A]">
       <TopBar
         activeTab={activeTab}
         onTabChange={(tab) => {
@@ -79,8 +117,8 @@ export default function App() {
         {loading ? (
           <div className="space-y-6">
             <div className="h-72 bg-white border border-slate-200 rounded-2xl animate-pulse" />
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {[1, 2, 3, 4].map((n) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {[1, 2, 3].map((n) => (
                 <div
                   key={n}
                   className="h-28 bg-white border border-slate-200 rounded-xl animate-pulse"
@@ -104,24 +142,54 @@ export default function App() {
             {activeTab === 'search' && (
               <HeroAndSearch
                 tutors={state.tutors}
+                groupClasses={state.groupClasses || []}
+                favoriteTutorIds={state.favoriteTutorIds || []}
                 activeClientTier={state.activeClientTier}
+                activeUser={state.activeUser}
                 onSelectTutor={(tutor) => setSelectedTutor(tutor)}
+                onSelectGroupClass={(gc) => setSelectedGroupClass(gc)}
+                onToggleFavorite={handleToggleFavorite}
                 onSwitchTier={handleSwitchTier}
+                onOpenAuth={() => {
+                  setActiveTab('auth');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 showAiMatcher={showAiMatcher}
                 onToggleAiMatcher={setShowAiMatcher}
+              />
+            )}
+
+            {activeTab === 'auth' && (
+              <RegistrationPortal
+                activeUser={state.activeUser}
+                onSuccessNavigate={(target) => {
+                  setActiveTab(target);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                onRefresh={fetchBootstrap}
               />
             )}
 
             {activeTab === 'student' && (
               <StudentPortal
                 studentName={state.studentName}
+                childrenNames={state.childrenNames || [state.studentName]}
+                registeredChildrenDetails={state.registeredChildrenDetails}
+                activeUser={state.activeUser}
                 activeClientTier={state.activeClientTier}
+                tutors={state.tutors}
+                favoriteTutorIds={state.favoriteTutorIds || []}
                 bookings={state.bookings}
                 assignments={state.assignments}
                 transactions={state.transactions}
                 notifications={state.notifications}
                 onSwitchTier={handleSwitchTier}
+                onSelectTutor={(tutor) => setSelectedTutor(tutor)}
                 onEnterClassroom={(booking) => setClassroomBooking(booking)}
+                onNavigateToSearch={() => {
+                  setActiveTab('search');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
                 onRefresh={fetchBootstrap}
               />
             )}
@@ -129,6 +197,7 @@ export default function App() {
             {activeTab === 'tutor' && (
               <TutorPortal
                 tutors={state.tutors}
+                groupClasses={state.groupClasses || []}
                 bookings={state.bookings}
                 onRefresh={fetchBootstrap}
                 onEnterClassroom={(booking) => setClassroomBooking(booking)}
@@ -137,7 +206,10 @@ export default function App() {
 
             {activeTab === 'roadmap' && (
               <CertificationAndRoadmap
+                tutors={state.tutors}
+                bookings={state.bookings}
                 applications={state.applications}
+                reports={state.reports || []}
                 activeClientTier={state.activeClientTier}
                 onSwitchTier={handleSwitchTier}
                 onRefresh={fetchBootstrap}
@@ -158,16 +230,23 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('search')}
-              className="hover:text-slate-900 cursor-pointer"
+              className="hover:text-emerald-800 cursor-pointer"
             >
               المدرسون المعتمدون
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('auth')}
+              className="hover:text-emerald-800 cursor-pointer"
+            >
+              التسجيل والدخول
             </button>
             <button
               type="button"
               onClick={() => setActiveTab('student')}
               className="hover:text-slate-900 cursor-pointer"
             >
-              بوابة الطالب
+              بوابة الطالب وولي الأمر
             </button>
             <button
               type="button"
@@ -181,7 +260,7 @@ export default function App() {
               onClick={() => setActiveTab('roadmap')}
               className="hover:text-slate-900 cursor-pointer"
             >
-              التحقق وخارطة الطريق
+              الإدارة والاعتماد
             </button>
           </div>
         </div>
@@ -193,16 +272,51 @@ export default function App() {
           reviews={state.reviews}
           activeClientTier={state.activeClientTier}
           defaultStudentName={state.studentName}
+          childrenNames={state.childrenNames || [state.studentName]}
           onClose={() => setSelectedTutor(null)}
           onBooked={fetchBootstrap}
           onReviewAdded={fetchBootstrap}
+          onGoToPortal={() => {
+            setActiveTab('student');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
         />
       )}
 
-      {classroomBooking && (
+      {currentSelectedGroupClass && state && (
+        <GroupClassEnrollModal
+          groupClass={currentSelectedGroupClass}
+          activeClientTier={state.activeClientTier}
+          defaultStudentName={state.studentName}
+          childrenNames={state.childrenNames || [state.studentName]}
+          onClose={() => setSelectedGroupClass(null)}
+          onEnrolled={fetchBootstrap}
+          onGoToPortal={() => {
+            setActiveTab('student');
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+        />
+      )}
+
+      {currentClassroomBooking && (
         <VirtualClassroomModal
-          booking={classroomBooking}
+          booking={currentClassroomBooking}
           onClose={() => setClassroomBooking(null)}
+          onReportGenerated={fetchBootstrap}
+        />
+      )}
+
+      {state && (
+        <FloatingAiAssistant
+          activeTab={activeTab}
+          studentName={state.studentName}
+          displayName={state.activeUser?.signedIn ? state.activeUser.fullName : state.studentName}
+          activeClientTier={state.activeClientTier}
+          onNavigate={(tab) => {
+            setActiveTab(tab);
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          onRefresh={fetchBootstrap}
         />
       )}
     </div>

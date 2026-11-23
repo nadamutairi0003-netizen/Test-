@@ -1,34 +1,42 @@
 import React, { useEffect, useState } from 'react';
 import {
   Calendar,
+  CheckCircle2,
   ExternalLink,
-  FileText,
   Mic,
   MicOff,
   Send,
+  Sparkles,
   Video,
   VideoOff,
   X,
 } from 'lucide-react';
-import type { Booking } from '../types';
+import type { Booking, PostSessionAiReport } from '../types';
 import { downloadCalendarInvite } from '../utils/pricing';
 
 interface VirtualClassroomModalProps {
   booking: Booking;
   onClose: () => void;
+  onReportGenerated: () => void;
 }
 
 export const VirtualClassroomModal: React.FC<VirtualClassroomModalProps> = ({
   booking,
   onClose,
+  onReportGenerated,
 }) => {
   const [elapsedSec, setElapsedSec] = useState(0);
   const [micOn, setMicOn] = useState(true);
   const [camOn, setCamOn] = useState(true);
   const [boardText, setBoardText] = useState(
     booking.sessionNotes ||
-      `ملخص الحصة: ${booking.subject} (${booking.gradeLevel})\n• الأهداف: مراجعة المفاهيم الأساسية وحل تمارين تطبيقية.\n• المعادلة / القاعدة قيد الشرح: جاهز للكتابة التفاعلية.`
+      `ملخص الحصة: ${booking.subject} (${booking.gradeLevel})\n• تم شرح المفاهيم الأساسية وحل تمارين تطبيقية.\n• نقاط تحتاج مراجعة: تطبيقات المسائل اللفظية.`
   );
+  const [consentChecked, setConsentChecked] = useState(true);
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [aiReport, setAiReport] = useState<PostSessionAiReport | undefined>(booking.aiReport);
+
   const [chatInput, setChatInput] = useState('');
   const [messages, setMessages] = useState<{ sender: string; text: string; time: string }[]>([
     {
@@ -54,6 +62,36 @@ export const VirtualClassroomModal: React.FC<VirtualClassroomModalProps> = ({
       { sender: booking.studentName, text: chatInput.trim(), time: `${mm}:${ss}` },
     ]);
     setChatInput('');
+  };
+
+  const handleGenerateSessionReport = async () => {
+    if (!consentChecked) {
+      setReportError('يرجى تأكيد موافقة الطالب والمدرس على تلخيص الحصة.');
+      return;
+    }
+    setReportLoading(true);
+    setReportError(null);
+    try {
+      const res = await fetch('/api/ai/session-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          bookingId: booking.id,
+          lessonTranscriptOrNotes: boardText,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setReportError(data.error || 'تعذر توليد ملخص الحصة');
+      } else {
+        setAiReport(data.aiReport);
+        onReportGenerated();
+      }
+    } catch {
+      setReportError('تعذر الاتصال بالخادم.');
+    } finally {
+      setReportLoading(false);
+    }
   };
 
   return (
@@ -92,6 +130,8 @@ export const VirtualClassroomModal: React.FC<VirtualClassroomModalProps> = ({
                   tutorName: booking.tutorName,
                   scheduledSlot: booking.scheduledSlot,
                   meetingUrl: booking.meetingUrl,
+                  studentEmail: booking.studentEmail,
+                  tutorEmail: booking.tutorEmail,
                 })
               }
               className="px-3 py-1.5 text-xs font-medium bg-slate-800 hover:bg-slate-700 rounded-lg flex items-center gap-1.5 cursor-pointer"
@@ -112,48 +152,45 @@ export const VirtualClassroomModal: React.FC<VirtualClassroomModalProps> = ({
 
         {/* Main Classroom Grid */}
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-y-auto">
-          {/* Whiteboard & Controls */}
-          <div className="lg:col-span-8 p-6 space-y-4 border-b lg:border-b-0 lg:border-l border-slate-200 flex flex-col justify-between">
-            <div className="space-y-3">
+          <div className="lg:col-span-8 p-6 space-y-5 border-b lg:border-b-0 lg:border-l border-slate-200">
+            <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900">
-                  السبورة التفاعلية وملاحظات الدرس
-                </h3>
+                <h3 className="text-sm font-bold text-slate-900">السبورة التفاعلية ومحتوى الحصة</h3>
                 <span className="text-xs text-slate-500">الطالب: {booking.studentName}</span>
               </div>
 
               <textarea
                 value={boardText}
                 onChange={(e) => setBoardText(e.target.value)}
-                rows={10}
+                rows={6}
                 className="w-full p-4 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-700 leading-relaxed"
               />
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setMicOn(!micOn)}
-                  className={`px-3.5 py-2 text-xs font-medium rounded-lg border flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border flex items-center gap-1.5 cursor-pointer ${
                     micOn
                       ? 'bg-white border-slate-200 text-slate-800'
                       : 'bg-red-50 border-red-200 text-red-700'
                   }`}
                 >
-                  {micOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                  <span>{micOn ? 'الميكروفون مفعل' : 'مكتوم'}</span>
+                  {micOn ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+                  <span>{micOn ? 'الصوت مفعل' : 'مكتوم'}</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => setCamOn(!camOn)}
-                  className={`px-3.5 py-2 text-xs font-medium rounded-lg border flex items-center gap-1.5 cursor-pointer ${
+                  className={`px-3 py-2 text-xs font-medium rounded-lg border flex items-center gap-1.5 cursor-pointer ${
                     camOn
                       ? 'bg-white border-slate-200 text-slate-800'
                       : 'bg-red-50 border-red-200 text-red-700'
                   }`}
                 >
-                  {camOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
+                  {camOn ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5" />}
                   <span>{camOn ? 'الكاميرا مفعلة' : 'مغلقة'}</span>
                 </button>
               </div>
@@ -163,24 +200,82 @@ export const VirtualClassroomModal: React.FC<VirtualClassroomModalProps> = ({
                   href={booking.meetingUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 rounded-lg flex items-center gap-1.5"
+                  className="px-4 py-2 text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 rounded-lg flex items-center gap-1.5"
                 >
-                  <span>فتح عبر Microsoft Teams</span>
+                  <span>فتح رابط Microsoft Teams</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
               )}
             </div>
-          </div>
 
-          {/* Chat & Shared Files */}
-          <div className="lg:col-span-4 p-5 bg-slate-50 flex flex-col justify-between space-y-4">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-bold text-slate-900">محادثة الحصة</h3>
-                <FileText className="w-4 h-4 text-slate-400" />
+            {/* Post-Session AI Lesson Summary & Parent Report */}
+            <div className="pt-4 border-t border-slate-200 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={consentChecked}
+                    onChange={(e) => setConsentChecked(e.target.checked)}
+                    className="rounded accent-emerald-700"
+                  />
+                  <span>موافقة الأطراف على تسجيل وتلخيص الحصة بالذكاء الاصطناعي</span>
+                </label>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateSessionReport}
+                  disabled={reportLoading}
+                  className="px-4 py-2 text-xs font-semibold text-white bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 rounded-lg cursor-pointer flex items-center gap-1.5"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>
+                    {reportLoading
+                      ? 'جاري توليد التقرير...'
+                      : 'توليد ملخص الحصة وتقرير ولي الأمر'}
+                  </span>
+                </button>
               </div>
 
-              <div className="space-y-2.5 max-h-64 overflow-y-auto">
+              {reportError && (
+                <p className="text-xs text-red-700 bg-red-50 border border-red-200 p-2.5 rounded-lg">
+                  {reportError}
+                </p>
+              )}
+
+              {aiReport && (
+                <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200 space-y-2 text-xs">
+                  <div className="flex items-center gap-1.5 font-bold text-emerald-900">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-700" />
+                    <span>تقرير ما بعد الحصة التلقائي</span>
+                  </div>
+                  <p>
+                    <strong className="text-slate-900">ملخص الشرح:</strong> {aiReport.summary}
+                  </p>
+                  <p>
+                    <strong className="text-slate-900">الواجب المقترح:</strong> {aiReport.homework}
+                  </p>
+                  <p>
+                    <strong className="text-slate-900">نقاط تحتاج مراجعة:</strong>{' '}
+                    {aiReport.weakPoints}
+                  </p>
+                  <p>
+                    <strong className="text-slate-900">خطة الحصة القادمة:</strong>{' '}
+                    {aiReport.nextPlan}
+                  </p>
+                  <p>
+                    <strong className="text-slate-900">تقرير ولي الأمر:</strong>{' '}
+                    {aiReport.parentReport}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Chat */}
+          <div className="lg:col-span-4 p-5 bg-slate-50 flex flex-col justify-between space-y-4">
+            <div className="space-y-3">
+              <h3 className="text-sm font-bold text-slate-900">محادثة الحصة</h3>
+              <div className="space-y-2.5 max-h-72 overflow-y-auto">
                 {messages.map((m, idx) => (
                   <div key={idx} className="bg-white border border-slate-200 rounded-lg p-3 space-y-1">
                     <div className="flex items-center justify-between text-[11px] text-slate-400">
@@ -198,7 +293,7 @@ export const VirtualClassroomModal: React.FC<VirtualClassroomModalProps> = ({
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="اكتب سؤالاً أو ملاحظة..."
+                placeholder="اكتب سؤالاً..."
                 className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-emerald-700"
               />
               <button

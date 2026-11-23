@@ -1,18 +1,74 @@
-export type PackageTier = 'hourly' | 'weekly' | 'monthly' | 'semester';
+export type PackageTier = 'hourly' | 'weekly' | 'monthly' | 'semester' | 'custom';
 export type ClientTier = 'Regular' | 'Premium' | 'Elite';
 export type MeetingPlatform = 'teams' | 'classroom';
+export type LearningTrack = 'المراحل الدراسية' | 'قياس' | 'المرحلة الجامعية';
+export type UserRole = 'student' | 'parent' | 'tutor';
+export type GroupFixedSlotTime = '4:00 م' | '7:00 م' | '9:30 م';
+
+export interface GroupClassSession {
+  id: string;
+  title: string;
+  subject: string;
+  learningTrack: LearningTrack;
+  gradeLevel: string;
+  tutorId: string;
+  tutorName: string;
+  tutorLicenseId: string;
+  fixedTimeSlot: GroupFixedSlotTime;
+  scheduleLabel: string;
+  privateHourlyRate: number;
+  groupPricePerSession: number;
+  weeklyPassPrice: number;
+  maxSeats: number;
+  enrolledCount: number;
+  enrolledStudents: string[];
+  meetingPlatform: MeetingPlatform;
+  meetingUrl: string;
+  description: string;
+}
+
+export interface RegisteredChild {
+  name: string;
+  gradeLevel: string;
+  track: LearningTrack;
+  schoolName?: string;
+}
+
+export interface ActiveUserProfile {
+  role: UserRole;
+  fullName: string;
+  email: string;
+  nationalId?: string;
+  city?: string;
+  preferredTrack: LearningTrack;
+  signedIn: boolean;
+}
+
+export interface PostSessionAiReport {
+  summary: string;
+  homework: string;
+  weakPoints: string;
+  nextPlan: string;
+  parentReport: string;
+  generatedAt: string;
+}
 
 export interface Tutor {
   id: string;
   name: string;
   avatar: string;
   gender: 'ذكر' | 'أنثى';
+  city: string;
+  nationality: string;
+  university: string;
   subject: string;
   subjects: string[];
+  learningTracks: LearningTrack[];
   gradeLevels: string[];
   curriculum: string;
   languages: string[];
   hourlyRate: number;
+  dailyCapacityHours: number;
   bio: string;
   ministryLicenseId: string;
   verificationStatus: 'verified' | 'pending' | 'rejected';
@@ -24,6 +80,7 @@ export interface Tutor {
   experienceYears: number;
   exclusiveTier?: boolean;
   universityLevel?: boolean;
+  walletWithdrawn?: number;
 }
 
 export interface Booking {
@@ -31,9 +88,15 @@ export interface Booking {
   tutorId: string;
   tutorName: string;
   studentName: string;
+  studentEmail?: string;
+  tutorEmail?: string;
   subject: string;
+  learningTrack?: LearningTrack;
   gradeLevel: string;
+  bookingMode?: 'private' | 'group';
+  groupClassId?: string;
   packageType: PackageTier;
+  sessionsPerWeek?: number;
   hoursCount: number;
   basePrice: number;
   discountAmount: number;
@@ -46,7 +109,9 @@ export interface Booking {
   calendarInviteSent: boolean;
   status: 'confirmed' | 'completed' | 'cancelled';
   attendanceStatus: 'pending' | 'present' | 'absent';
+  studentRatingByTutor?: number;
   sessionNotes: string;
+  aiReport?: PostSessionAiReport;
   createdAt: string;
 }
 
@@ -103,29 +168,54 @@ export interface TutorApplication {
   id: string;
   name: string;
   gender: 'ذكر' | 'أنثى';
+  city: string;
+  nationality: string;
+  university: string;
   subject: string;
   curriculum: string;
+  learningTracks: LearningTrack[];
   gradeLevels: string[];
   languages: string[];
   hourlyRate: number;
+  dailyCapacityHours: number;
   licenseNumber: string;
   universityDegree: string;
+  bankIban: string;
   experienceYears: number;
   certificateFileName: string;
+  uploadedFiles?: string[];
+  agreementSigned?: boolean;
+  agreementSignedAt?: string;
+  signatureDataUrl?: string;
   status: 'pending' | 'approved' | 'rejected';
   submittedAt: string;
 }
 
+export interface AbuseReport {
+  id: string;
+  reporterName: string;
+  targetName: string;
+  reason: string;
+  date: string;
+  status: 'open' | 'resolved';
+}
+
 export interface PlatformState {
   tutors: Tutor[];
+  groupClasses: GroupClassSession[];
   bookings: Booking[];
   assignments: Assignment[];
   reviews: Review[];
   transactions: PaymentTransaction[];
   notifications: NotificationItem[];
   applications: TutorApplication[];
+  reports: AbuseReport[];
   activeClientTier: ClientTier;
   studentName: string;
+  childrenNames: string[];
+  registeredChildrenDetails?: RegisteredChild[];
+  activeUser?: ActiveUserProfile;
+  favoriteTutorIds: string[];
 }
 
 export interface AiRecommendationItem {

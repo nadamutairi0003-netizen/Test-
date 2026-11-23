@@ -10,6 +10,12 @@
   html {
     font-family: var(--font-sans);
     scroll-behavior: smooth;
+    background-color: #f6faf8;
+  }
+
+  body {
+    color: #0f172a;
+    -webkit-font-smoothing: antialiased;
   }
 
   h1, h2, h3, .font-display {
@@ -28,4 +34,10 @@
 
 .balance-text {
   text-wrap: balance;
+}
+
+.bg-blueprint-grid {
+  background-color: #f6faf8;
+  background-image: radial-gradient(#d5e3db 1px, transparent 1px);
+  background-size: 28px 28px;
 }
